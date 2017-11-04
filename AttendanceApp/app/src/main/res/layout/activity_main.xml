@@ -15,7 +15,7 @@
         android:ems="10"
         android:inputType="textPersonName"
         android:text=""
-        android:hint="Enter url"/>
+        android:hint="Enter IP"/>
 
     <EditText
         android:id="@+id/uname"

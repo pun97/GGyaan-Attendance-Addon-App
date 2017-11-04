@@ -2,7 +2,9 @@ package com.example.pun.attendanceapp;
 
 import android.Manifest;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Point;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.support.v4.app.ActivityCompat;
@@ -14,6 +16,9 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Toast;
+
+import com.google.android.gms.common.api.CommonStatusCodes;
+import com.google.android.gms.vision.barcode.Barcode;
 
 import org.json.JSONObject;
 
@@ -32,14 +37,18 @@ import javax.net.ssl.HttpsURLConnection;
 
 public class MainActivity extends AppCompatActivity {
 
+    EditText urlText;
+    EditText userText;
+    EditText passwText;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         Button login = (Button) findViewById(R.id.button);
-        final EditText urlText = (EditText) findViewById(R.id.url);
-        final EditText userText = (EditText) findViewById(R.id.uname);
-        final EditText passwText = (EditText) findViewById(R.id.pword);
+        urlText = (EditText) findViewById(R.id.url);
+        userText = (EditText) findViewById(R.id.uname);
+        passwText = (EditText) findViewById(R.id.pword);
 
         ActivityCompat.requestPermissions(this,new String[]{Manifest.permission.INTERNET},1);
 
@@ -50,19 +59,43 @@ public class MainActivity extends AppCompatActivity {
                 //String url = "http://10.50.46.232:5000/mobilelogin";
                 //String uname="Admin";
                 //String pword="admin";
-
-                String url = urlText.getText().toString();
+                String url ="http://"+urlText.getText().toString()+":5000";
                 String uname = userText.getText().toString();
                 String pword = passwText.getText().toString();
-
+                Intent intent = new Intent(MainActivity.this, BarcodeCaptureActivity.class);
+                startActivityForResult(intent, 1);
+                /*
                 if (hasPermissions(MainActivity.this, new String[]{Manifest.permission.INTERNET})) {
-                    new SendLoginCredentials(url, uname, pword).execute();
-                }
+                    new SendLoginCredentials(url+"/attendance", uname, pword).execute();
+                }*/
 
 
             }
         });
-        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == 1) {
+            if (resultCode == CommonStatusCodes.SUCCESS) {
+                if (data != null) {
+                    Barcode barcode = data.getParcelableExtra(BarcodeCaptureActivity.BarcodeObject);
+                    Toast.makeText(MainActivity.this,barcode.displayValue,Toast.LENGTH_SHORT).show();
+                    if (hasPermissions(MainActivity.this, new String[]{Manifest.permission.INTERNET})) {
+                        String url ="http://"+urlText.getText().toString()+":5000";
+                        String uname = userText.getText().toString();
+                        String pword = passwText.getText().toString();
+
+                        new SendLoginCredentials(url+"/attendance",uname,pword,barcode.displayValue).execute();
+
+                    }
+                } else Toast.makeText(MainActivity.this,"NO BAR CODE",Toast.LENGTH_SHORT).show();
+            } else Log.e("APP ERROR:", String.format(getString(R.string.barcode_error_format),
+                    CommonStatusCodes.getStatusCodeString(resultCode)));
+        } else super.onActivityResult(requestCode, resultCode, data);
+    }
+
+
 
 
     public static boolean hasPermissions(Context context, String[] permissions)
@@ -85,11 +118,15 @@ public class MainActivity extends AppCompatActivity {
         String uname;
         String password;
 
-        SendLoginCredentials(String url, String username, String pword){
+        String qrdata;
+
+        SendLoginCredentials(String url, String username, String pword,String qrdata){
             this.url = url;
             this.uname = username;
             this.password = pword;
+            this.qrdata=qrdata;
         }
+
         @Override
         protected String doInBackground(String... strings) {
             try{
@@ -98,7 +135,7 @@ public class MainActivity extends AppCompatActivity {
                 JSONObject postDataParams = new JSONObject();
                 postDataParams.put("username",uname);//it was rno before change in flask server
                 postDataParams.put("password",password);
-
+                postDataParams.put("qrdata",qrdata);
                 Log.d("ATTENDACE:",postDataParams.toString());
 
                 HttpURLConnection connection = (HttpURLConnection) url.openConnection();
@@ -148,7 +185,6 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         protected void onPreExecute() {
-            super.onPreExecute();
         }
 
         @Override
@@ -156,6 +192,9 @@ public class MainActivity extends AppCompatActivity {
             Toast.makeText(getApplicationContext(), result,
                     Toast.LENGTH_LONG).show();
             super.onPostExecute(result);
+
+            //Intent intent = new Intent(getApplicationContext(), BarcodeCaptureActivity.class);
+            //startActivityForResult(intent, 1);
         }
     }
     public String getPostDataString(JSONObject params) throws Exception {
